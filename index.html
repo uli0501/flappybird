@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird 寬廣視野版</title>
+    <title>Flappy Bird 同步優化版</title>
     <style>
         body { margin: 0; overflow: hidden; background: #b0e0e6; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
         canvas { display: block; background: #ffffff; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border-radius: 12px; }
         #status { position: absolute; top: 12%; text-align: center; width: 100%; pointer-events: none; }
         .score { color: #2c3e50; font-size: 40px; font-weight: bold; }
-        .msg { color: #34495e; font-size: 16px; margin-top: 10px; background: rgba(255,255,255,0.8); padding: 5px 15px; border-radius: 20px; display: inline-block; }
+        .msg { color: #34495e; font-size: 18px; margin-top: 10px; background: rgba(255,255,255,0.8); padding: 8px 20px; border-radius: 25px; display: inline-block; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="status">
     <div class="score" id="scoreDisplay">0</div>
-    <div class="msg" id="message">視野極大化！點擊開始</div>
+    <div class="msg" id="message">點擊開始遊戲</div>
 </div>
 <canvas id="gameCanvas"></canvas>
 
@@ -29,26 +29,26 @@
     canvas.width = 450; 
     canvas.height = 600;
 
-    // --- ### 🛠️ 參數調校 ### ---
-    let gravity = 0.05;           
-    let jumpStrength = -2.3;      
-    let basePipeSpeed = 1.5;      
-    let currentPipeSpeed = 1.5;   
-    let speedIncrement = 0.04;    // 稍微調降增加幅度，讓挑戰更平滑
-    let maxSpeed = 5.0;           
+    // --- ### 核心參數 (Delta Time 基準) ### ---
+    let gravity = 0.25;           
+    let jumpStrength = -4.5;      
+    let basePipeSpeed = 2.5;      
+    let currentPipeSpeed = 2.5;   
+    let speedIncrement = 0.05;    
+    let maxSpeed = 6.0;           
     let pipeInterval = 1800;      
-    // --------------------------------
+    // ------------------------------------------
 
     let birdSize = 35;
-    // --- ### 調整重點：角色再往左 (20%) ### ---
-    let birdX = canvas.width * 0.20; // 角色移至左側 1/5 處，留出 80% 空間看障礙物
-    // ------------------------------------------
+    let birdX = canvas.width * 0.20; // 維持 20% 偏左視野
     let birdY = canvas.height / 2 - birdSize / 2;
     let birdVelocity = 0;
     let pipes = [];
     let score = 0;
     let gameStarted = false;
     let gameActive = true;
+    
+    let lastTimestamp = 0;
     let lastPipeTime = 0;
 
     function resetGame() {
@@ -58,9 +58,10 @@
         pipes = [];
         score = 0;
         scoreDisplay.innerText = score;
-        message.innerText = "點擊開始";
+        message.innerText = "點擊開始遊戲";
         gameActive = true;
         gameStarted = false;
+        lastTimestamp = 0; 
         draw(); 
     }
 
@@ -70,8 +71,9 @@
         if (!gameStarted) {
             gameStarted = true;
             message.innerText = "";
+            lastTimestamp = performance.now();
             lastPipeTime = performance.now();
-            update(performance.now());
+            requestAnimationFrame(update);
         } else {
             birdVelocity = jumpStrength;
         }
@@ -90,12 +92,14 @@
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
+        // 障礙物
         pipes.forEach(p => {
             ctx.fillStyle = "#2ecc71";
             ctx.fillRect(p.x, 0, 50, p.top);
             ctx.fillRect(p.x, p.bottom, 50, canvas.height - p.bottom);
         });
 
+        // 角色 (黃色方塊)
         ctx.fillStyle = "#f1c40f";
         ctx.fillRect(birdX, birdY, birdSize, birdSize);
     }
@@ -103,10 +107,15 @@
     function update(timestamp) {
         if (!gameActive || !gameStarted) return;
 
-        birdVelocity += gravity;
-        birdY += birdVelocity;
+        if (!lastTimestamp) lastTimestamp = timestamp;
+        let deltaTime = (timestamp - lastTimestamp) / 16.67;
+        lastTimestamp = timestamp;
 
-        // 當速度變快，生成的間隔也要隨之縮短，保持水管間的距離感
+        if (deltaTime > 5) deltaTime = 1; 
+
+        birdVelocity += gravity * deltaTime;
+        birdY += birdVelocity * deltaTime;
+
         let dynamicInterval = pipeInterval * (basePipeSpeed / currentPipeSpeed);
 
         if (timestamp - lastPipeTime > dynamicInterval) {
@@ -116,7 +125,7 @@
 
         for (let i = pipes.length - 1; i >= 0; i--) {
             let p = pipes[i];
-            p.x -= currentPipeSpeed;
+            p.x -= currentPipeSpeed * deltaTime;
 
             if (birdX + birdSize > p.x && birdX < p.x + 50 && (birdY < p.top || birdY + birdSize > p.bottom)) {
                 gameActive = false;
@@ -126,13 +135,10 @@
                 p.passed = true;
                 score++;
                 scoreDisplay.innerText = score;
-                
-                // 速度遞增
                 if (currentPipeSpeed < maxSpeed) {
                     currentPipeSpeed += speedIncrement;
                 }
             }
-
             if (p.x < -50) pipes.splice(i, 1);
         }
 
@@ -140,7 +146,7 @@
 
         draw();
         if (gameActive) requestAnimationFrame(update);
-        else message.innerText = "重新挑戰";
+        else message.innerText = "點擊開始遊戲"; // 結束後也統一顯示這句
     }
 
     draw();
