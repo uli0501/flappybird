@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Bird 寬廣視野版</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #b0e0e6; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { display: block; background: #ffffff; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border-radius: 12px; }
+        #status { position: absolute; top: 12%; text-align: center; width: 100%; pointer-events: none; }
+        .score { color: #2c3e50; font-size: 40px; font-weight: bold; }
+        .msg { color: #34495e; font-size: 16px; margin-top: 10px; background: rgba(255,255,255,0.8); padding: 5px 15px; border-radius: 20px; display: inline-block; }
+    </style>
+</head>
+<body>
+
+<div id="status">
+    <div class="score" id="scoreDisplay">0</div>
+    <div class="msg" id="message">視野極大化！點擊開始</div>
+</div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const message = document.getElementById('message');
+
+    canvas.width = 450; 
+    canvas.height = 600;
+
+    // --- ### 🛠️ 參數調校 ### ---
+    let gravity = 0.05;           
+    let jumpStrength = -2.3;      
+    let basePipeSpeed = 1.5;      
+    let currentPipeSpeed = 1.5;   
+    let speedIncrement = 0.04;    // 稍微調降增加幅度，讓挑戰更平滑
+    let maxSpeed = 5.0;           
+    let pipeInterval = 1800;      
+    // --------------------------------
+
+    let birdSize = 35;
+    // --- ### 調整重點：角色再往左 (20%) ### ---
+    let birdX = canvas.width * 0.20; // 角色移至左側 1/5 處，留出 80% 空間看障礙物
+    // ------------------------------------------
+    let birdY = canvas.height / 2 - birdSize / 2;
+    let birdVelocity = 0;
+    let pipes = [];
+    let score = 0;
+    let gameStarted = false;
+    let gameActive = true;
+    let lastPipeTime = 0;
+
+    function resetGame() {
+        birdY = canvas.height / 2 - birdSize / 2;
+        birdVelocity = 0;
+        currentPipeSpeed = basePipeSpeed;
+        pipes = [];
+        score = 0;
+        scoreDisplay.innerText = score;
+        message.innerText = "點擊開始";
+        gameActive = true;
+        gameStarted = false;
+        draw(); 
+    }
+
+    function handleInput(e) {
+        if (e.cancelable) e.preventDefault();
+        if (!gameActive) { resetGame(); return; }
+        if (!gameStarted) {
+            gameStarted = true;
+            message.innerText = "";
+            lastPipeTime = performance.now();
+            update(performance.now());
+        } else {
+            birdVelocity = jumpStrength;
+        }
+    }
+
+    window.addEventListener('keydown', (e) => { if(e.code === 'Space') handleInput(e); });
+    window.addEventListener('touchstart', handleInput, { passive: false });
+    window.addEventListener('mousedown', (e) => { if(e.button === 0) handleInput(e); });
+
+    function createPipe() {
+        const gap = 190; 
+        const height = Math.floor(Math.random() * (canvas.height - gap - 120)) + 60;
+        pipes.push({ x: canvas.width, top: height, bottom: height + gap, passed: false });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        pipes.forEach(p => {
+            ctx.fillStyle = "#2ecc71";
+            ctx.fillRect(p.x, 0, 50, p.top);
+            ctx.fillRect(p.x, p.bottom, 50, canvas.height - p.bottom);
+        });
+
+        ctx.fillStyle = "#f1c40f";
+        ctx.fillRect(birdX, birdY, birdSize, birdSize);
+    }
+
+    function update(timestamp) {
+        if (!gameActive || !gameStarted) return;
+
+        birdVelocity += gravity;
+        birdY += birdVelocity;
+
+        // 當速度變快，生成的間隔也要隨之縮短，保持水管間的距離感
+        let dynamicInterval = pipeInterval * (basePipeSpeed / currentPipeSpeed);
+
+        if (timestamp - lastPipeTime > dynamicInterval) {
+            createPipe();
+            lastPipeTime = timestamp;
+        }
+
+        for (let i = pipes.length - 1; i >= 0; i--) {
+            let p = pipes[i];
+            p.x -= currentPipeSpeed;
+
+            if (birdX + birdSize > p.x && birdX < p.x + 50 && (birdY < p.top || birdY + birdSize > p.bottom)) {
+                gameActive = false;
+            }
+
+            if (!p.passed && p.x + 50 < birdX) {
+                p.passed = true;
+                score++;
+                scoreDisplay.innerText = score;
+                
+                // 速度遞增
+                if (currentPipeSpeed < maxSpeed) {
+                    currentPipeSpeed += speedIncrement;
+                }
+            }
+
+            if (p.x < -50) pipes.splice(i, 1);
+        }
+
+        if (birdY + birdSize > canvas.height || birdY < 0) gameActive = false;
+
+        draw();
+        if (gameActive) requestAnimationFrame(update);
+        else message.innerText = "重新挑戰";
+    }
+
+    draw();
+</script>
+
+</body>
+</html>
